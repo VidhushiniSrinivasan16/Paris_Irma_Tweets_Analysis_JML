@@ -1,0 +1,1642 @@
+```{r "setup", include=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "/Users/vsriniv6/Documents/paris_data")
+```
+
+```{r}
+options(stringsAsFactors = FALSE)
+Sys.setlocale(category = "LC_ALL", locale = "en_US.UTF-8")
+```
+
+```{r}
+#rm(data,data_non_solidarity,data_solidarity,emDict_raw)
+rm(list = ls()) 
+#install.packages("slam")
+library(slam)
+library(textcat)
+#library(cldr)
+library(entropart)
+library(boot)
+library(vegan)
+library(simboot)
+#update.packages()
+library(tidyverse)
+#library(tokenizers)
+library(mgcv)
+library(twitteR)
+library(plyr)
+library(dplyr)
+library(ROAuth)
+library(stringr)
+library(ggplot2)
+library(httr)
+library(wordcloud)
+library(stringi)
+#library(sentiment)
+library(SnowballC)
+library(tm)
+library(RColorBrewer)
+```
+
+
+```{r}
+#setwd("/Users/vsriniv6/Documents/paris_data")
+folder <- "/Users/vsriniv6/Documents/paris_data/Irma/"      # path to folder that holds multiple .csv files
+file_list <- list.files(path=folder, pattern="*.csv") # create list of all .csv files in folder
+
+# read in each .csv file in file_list and rbind them into a data frame called data_irma 
+data_irma <- 
+  do.call("rbind", 
+          lapply(file_list, 
+                 function(x) 
+                 read.csv(paste(folder, x, sep=''), 
+                 stringsAsFactors = FALSE, fileEncoding = "UTF-8")))
+```
+
+
+```{r}
+rm(file_list,folder)
+```
+
+
+```{r}
+names(data_irma)
+```
+
+
+
+
+```{r}
+nrow(data_irma)
+```
+
+```{r}
+unique(data_irma$lang)
+```
+
+
+
+```{r}
+lang_groups= data_irma%>%
+  group_by(user_lang=data_irma$lang) %>%
+  dplyr::summarize(n=n())
+print(sum(lang_groups$n))
+```
+
+
+
+```{r}
+library(ggplot2)
+library(scales)
+ggplot(lang_groups, aes(x = reorder(user_lang, -n), y = n)) +
+         geom_bar(stat="identity") +
+        theme(axis.text.x=element_text(angle = -90, hjust = 0)) +
+        scale_y_continuous(labels = comma)
+```
+
+We can see that English, Spanish and French are the top three languages in paris dataset. Let's analyse the entropy of these three languages
+
+```{r}
+data_new= data_irma%>%
+  group_by(user_lang=data_irma$lang) 
+```
+  
+  
+  
+  
+  
+  
+  
+```{r}
+#rm(data,lang_groups)
+#rm(data_irma)
+data_en <- subset(data_new,user_lang == "en")
+corpus_en <-  data_en$text
+##tweet with emoji/emoticons
+length(corpus_en)
+corpus_en <- unique(corpus_en)
+length(corpus_en)
+corpus_en <- text$orig_tweets
+length(corpus_en)
+```
+
+
+
+
+```{r}
+corpus_en_emoji <- group_raw_tweets$text
+corpus_en_NO_emoji_text <- subset(corpus_en, !(corpus_en %in% c(corpus_en_emoji)))
+corpus_en_NO_emoji_text <- as.data.frame(unique(corpus_en_NO_emoji_text))
+names(corpus_en_NO_emoji_text)[1]<-"tweets"
+corpus_en_NO_emoji_text <- corpus_en_NO_emoji_text %>%dplyr::filter(!str_detect(tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+corpus_en_NO_emoji <- corpus_en_NO_emoji_text$tweets
+length(corpus_en_emoji)
+length(corpus_en_NO_emoji)
+```
+
+
+
+
+
+##English tweets 
+
+```{r}
+#rm(data_irma)
+ ##Remove emoji
+corpus_en_full <- iconv(corpus_en, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_en_full <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_en_full) 
+
+
+corpus_en_full <- Corpus(VectorSource(corpus_en_full))
+
+
+
+##convert text to lowercase
+corpus_en_full<- tm_map(corpus_en_full,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_en_full <- tm_map(corpus_en_full,removePunctuation)
+
+
+##remove numbers from text
+corpus_en_full <- tm_map(corpus_en_full,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_en <- tm_map(corpus_en_full,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,content_transformer(removeEmoticons))
+#len(cleaned_corpus_en)
+
+   
+##remove white space
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,stripWhitespace)
+###
+
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,removeWords)
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_en$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,stemDocument)
+cleaned_corpus_en <- tm_map(cleaned_corpus_en,stripWhitespace)
+#len(cleaned_corpus_en)
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_en,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+#length(cleaned_corpus_en)
+
+```
+
+
+
+
+##Average word length is 4.6 and average tweet length is 14.11 
+
+##Entropy for english tweets 
+
+```{r}
+rm(words_list,wsize_per_tweet,corpus_en,corpus_en_emoji,corpus_en_full)
+tdm <- TermDocumentMatrix(cleaned_corpus_en)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_en <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_en)/log(2)
+H
+```
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_en, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+
+Error bars with 95% confidence Intervals
+```{r}
+wf <- data.frame(word=names(freqSum_en), freq=freqSum_en)   
+head(wf)
+```
+
+```{r}
+wf_new <-wf[which(wf$freq>100000),]
+```
+
+
+```{r}
+#install.packages("Hmisc")
+ggplot(data=wf_new, aes(x=word, y=freq, fill=word))+ stat_summary(fun.y = mean, geom = "bar") + stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.3) + labs(x = "words", y = "frequency")
+
+```
+
+The entropy of english tweets is 10.03
+
+```{r}
+rm(tdm,cleaned_corpus_en)
+2^H
+```
+
+The perplexity of english tweets is 1046.
+
+
+
+```{r}
+rm(freqSum_en)
+```
+
+
+
+##English tweets with emoji/emoticons
+
+```{r}
+ ##Remove emoji
+corpus_en_emoji <- iconv(corpus_en_emoji, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_en_emoji <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_en_emoji) 
+
+
+corpus_en_emoji <- Corpus(VectorSource(corpus_en_emoji))
+
+
+
+##convert text to lowercase
+corpus_en_emoji <- tm_map(corpus_en_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_en_emoji <- tm_map(corpus_en_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_en_emoji <- tm_map(corpus_en_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_en_emoji <- tm_map(corpus_en_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,content_transformer(removeEmoticons))
+
+
+   
+##remove white space
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,stripWhitespace)
+###
+
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,removeWords)
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_en_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,stemDocument)
+cleaned_corpus_en_emoji <- tm_map(cleaned_corpus_en_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_en_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+length(cleaned_corpus_en_emoji)
+inspect(cleaned_corpus_en_emoji[1:25])
+
+```
+
+
+
+##Average word length is 4.6 and average tweet length is 17.27 with emoji/emoticons
+
+##Entropy for tweets with emoji/emoticons
+
+```{r}
+rm(words_list,wsize_per_tweet,corpus_en,corpus_en_emoji)
+tdm <- TermDocumentMatrix(cleaned_corpus_en_emoji)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_en <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_en)/log(2)
+H
+```
+
+Entropy of english  tweets with emoji/emoticons is 10.01
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_en, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+
+```{r}
+rm(tdm,cleaned_corpus_en_emoji)
+2^H
+```
+##Perplexity of english tweets with emoji/emoticons  is 1038
+
+
+##Emoji's per tweet
+
+```{r}
+count_matches <- function(string, matchto, description, sentiment = NA) {
+  
+  vec <- str_count(string, matchto)
+  matches <- which(vec != 0)
+  
+  descr <- NA
+  cnt <- NA
+  
+  if (length(matches) != 0) {
+    
+    descr <- description[matches]
+    cnt <- vec[matches]
+    
+  } 
+  
+  df <- data.frame(text = string, description = descr, count = cnt, sentiment = NA)
+  
+  if (!is.na(sentiment) & length(sentiment[matches]) != 0) {
+    
+    df$sentiment <- sentiment[matches]
+    
+  }
+  
+  return(df)
+  
+}
+```
+
+
+```{r}
+emojis_matching <- function(texts, matchto, description, sentiment = NA) {
+  texts %>% 
+    lapply(count_matches, matchto = matchto, description = description, sentiment = sentiment) %>%
+    bind_rows
+}
+```
+
+
+```{r}
+parallel_match<- function(texts, matchto, description, sentiment = NA, mc.cores = 4) {
+emojis_matching <- function(txt,matchto, description, sentiment = NA) {
+  txt %>%  lapply(count_matches, matchto = matchto, description = description, sentiment = sentiment) %>%
+    bind_rows
+}
+mclapply(X = texts, FUN = emojis_matching, matchto, description, sentiment = NA, mc.cores = mc.cores) %>%
+    bind_rows
+
+}
+```
+
+
+
+
+```{r}
+emDict_raw <- read.csv2("emDict.csv") %>% 
+      select(EN, utf8, unicode) %>% 
+      dplyr::rename(description = EN, r_encoding = utf8)
+```
+
+```{r}
+# plain skin tones
+skin_tones <- c("light skin tone", 
+                "medium-light skin tone", 
+                "medium skin tone",
+                "medium-dark skin tone", 
+                "dark skin tone")
+
+# remove plain skin tones and remove skin tone info in description
+emDict <- emDict_raw %>%
+  # remove plain skin tones emojis
+  filter(!description %in% skin_tones) %>%
+  # remove emojis with skin tones info, e.g. remove woman: light skin tone and only
+  # keep woman
+  filter(!grepl(":", description)) %>%
+  mutate(description = tolower(description)) %>%
+  mutate(unicode = unicode)
+```
+
+
+```{r}
+matchto <- emDict$r_encoding
+description <-emDict$description
+```
+
+
+```{r}
+#rm(new_data)
+
+new_data_en <- data_en %>% mutate(text=iconv(text, from = "latin1", to = "ascii", sub = "byte"))
+```
+
+
+```{r}
+is.factor(emDict$r_encoding)
+```
+
+```{r}
+head(new_data_en)
+```
+
+#Average number of emoji's/tweet
+```{r}
+text <- as.data.frame(unique(new_data_en$text))
+names(text)[1]<-"orig_tweets"
+```
+
+```{r}
+text 
+```
+
+```{r}
+text <- text %>% dplyr::filter(!str_detect(orig_tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+```
+
+
+
+
+```{r}
+library(dplyr)
+require(parallel) 
+raw_tweets <- parallel_match(text$orig_tweets, matchto, description,mc.cores=4)%>% 
+  filter(text != "") %>% filter(!is.na(count)) 
+  
+```
+
+
+```{r}
+head(raw_tweets,20)
+```
+
+```{r}
+drops <- c("sentiment")
+raw_tweets_altered <-raw_tweets[ , !(names(raw_tweets) %in% drops)]
+```
+
+```{r}
+raw_tweets_altered <- cbind(raw_tweets_altered,unique_count=1)
+raw_tweets_altered
+```
+
+
+```{r}
+group_raw_tweets <- group_by(raw_tweets_altered,text)%>%dplyr::summarise(count= sum(count),unique_count=sum(unique_count))
+group_raw_tweets
+```
+
+
+
+#Average number of emoji's per tweet - English
+
+```{r}
+mean(group_raw_tweets$count, na.rm = TRUE)
+```
+
+The average number of emoji's per tweet in English is 1.96
+
+#Average number of unique emoji's per tweet - English
+
+```{r}
+mean(group_raw_tweets$unique_count, na.rm = TRUE)
+```
+
+The average number of unique emoji's per tweet in English is 1.56
+
+#Emoji entropy - English
+```{r}
+H=Shannon(raw_tweets$count)/log(2)
+H
+```
+The entropy of emoji's in english is 17.42
+
+#top 50 tweets with emoji's
+```{r}
+top50_eng_irma <- head(group_raw_tweets[with(group_raw_tweets,order(-count)),],50)
+top50_eng_irma
+```
+
+
+```{r}
+tweets <-  top50_eng_irma$text
+m <- gregexpr("<[0-9a-f]{2}>", tweets)
+codes <- regmatches(tweets, m)
+chars <- lapply(codes, function(x) {
+    rawToChar(as.raw(strtoi(paste0("0x", substr(x,2,3)))), multiple = TRUE)
+})
+
+regmatches(tweets, m) <- chars
+Encoding(tweets) <- "UTF-8"
+tweets
+```
+
+```{r}
+write.csv(tweets,"top_50_english_irma.csv")
+```
+
+
+
+##English tweets  without emoji/emoticons
+```{r}
+
+### remove retweet entities
+ corpus_en_NO_emoji <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_en_NO_emoji) 
+ 
+corpus_en_NO_emoji <- Corpus(VectorSource(corpus_en_NO_emoji))
+##convert text to lowercase
+
+corpus_en_NO_emoji <- tm_map(corpus_en_NO_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_en_NO_emoji <- tm_map(corpus_en_NO_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_en_NO_emoji <- tm_map(corpus_en_NO_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##cleaned_corpus_USA_en_NO_emoji <- tm_map(corpus_USA_en_NO_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_en_NO_emoji <- tm_map(corpus_en_NO_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+cleaned_corpus_en_NO_emoji <- tm_map(cleaned_corpus_en_NO_emoji,removeWords)
+cleaned_corpus_en_NO_emoji <- tm_map(cleaned_corpus_en_NO_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_en_NO_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_en_NO_emoji <- tm_map(cleaned_corpus_en_NO_emoji,stemDocument)
+cleaned_corpus_en_NO_emoji <- tm_map(cleaned_corpus_en_NO_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_en_NO_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+```
+
+
+#Average word length is 4.5 and average tweet length is 11.18 without emoji/emoticons
+
+
+##Entropy analysis for english tweets without emoji/emoticons 
+
+```{r}
+rm(corpus_en_NO_emoji,freqSum_en,words_list,wsize_per_tweet)
+tdm <- TermDocumentMatrix(cleaned_corpus_en_NO_emoji)
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_en_no_emoji <- slam::row_sums(tdm, na.rm = T)
+#freqSum_France_fr 
+H=Shannon(freqSum_en_no_emoji)/log(2)
+H
+```
+
+##Entropy of english tweets  without emoji/emoticons is 9.83
+
+Thus, we can see that entropy for tweets without emoji/emoticons is slightly less than the entropy of tweets containing emoji/emoticons
+
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_en_no_emoji, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+##Perplexity
+```{r}
+#rm(tdm,cleaned_corpus_en_NO_emoji,freqSum_en_no_emoji)
+2^H
+```
+
+##Perplexity of english tweets without emoji/emoticons  is 911
+
+French
+
+
+```{r}
+#rm(data,lang_groups)
+#rm(data_irma)
+data_fr <- subset(data_new,user_lang == "fr")
+corpus_fr <-  data_fr$text
+##tweet with emoji/emoticons
+length(corpus_fr)
+corpus_fr <- unique(corpus_fr)
+length(corpus_fr)
+corpus_fr <- text$orig_tweets
+length(corpus_fr)
+```
+
+```{r}
+corpus_fr_emoji <- group_raw_tweets_fr$text
+corpus_fr_NO_emoji_text <- subset(corpus_fr, !(corpus_fr %in% c(corpus_fr_emoji)))
+corpus_fr_NO_emoji_text <- as.data.frame(unique(corpus_fr_NO_emoji_text))
+names(corpus_fr_NO_emoji_text)[1]<-"tweets"
+corpus_fr_NO_emoji_text <- corpus_fr_NO_emoji_text %>%dplyr::filter(!str_detect(tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+corpus_fr_NO_emoji <- corpus_fr_NO_emoji_text$tweets
+length(corpus_fr_emoji)
+length(corpus_fr_NO_emoji)
+```
+
+
+
+##French tweets  
+
+```{r}
+ ##Remove emoji
+corpus_fr_full <- iconv(corpus_fr, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_fr_full <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_fr_full) 
+
+
+corpus_fr_full <- Corpus(VectorSource(corpus_fr_full))
+
+
+
+##convert text to lowercase
+corpus_fr_full <- tm_map(corpus_fr_full,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_fr_full <- tm_map(corpus_fr_full,removePunctuation)
+
+
+##remove numbers from text
+corpus_fr_full <- tm_map(corpus_fr_full,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_fr <- tm_map(corpus_fr_full,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,content_transformer(removeEmoticons))
+
+
+   
+##remove white space
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,stripWhitespace)
+###
+
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,removeWords,c('paris'))
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_fr$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,stemDocument)
+cleaned_corpus_fr <- tm_map(cleaned_corpus_fr,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_fr,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+length(cleaned_corpus_fr)
+#inspect(cleaned_corpus_en_emoji[1:25])
+
+```
+
+
+
+##Average word length is 4.6 and average tweet length is 13.6
+
+##Entropy of French tweets
+
+```{r}
+rm(words_list,wsize_per_tweet,corpus_fr,data_fr)
+tdm <- TermDocumentMatrix(cleaned_corpus_fr)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_fr <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_fr)/log(2)
+H
+```
+
+
+##Entropy of French tweets with emoji/emoticons  is 9.85
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_fr, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+##Perplexity
+
+
+
+```{r}
+rm(tdm,freqSum_fr)
+2^H
+```
+
+
+The perplexity for french tweets is 926
+
+
+##French tweets  with emoji/emoticons
+
+```{r}
+rm(corpus_fr_full,cleaned_corpus_fr)
+ ##Remove emoji
+corpus_fr_emoji <- iconv(corpus_fr_emoji, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_fr_emoji <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_fr_emoji) 
+
+
+corpus_fr_emoji <- Corpus(VectorSource(corpus_fr_emoji))
+
+
+
+##convert text to lowercase
+corpus_fr_emoji <- tm_map(corpus_fr_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_fr_emoji <- tm_map(corpus_fr_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_fr_emoji <- tm_map(corpus_fr_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_fr_emoji <- tm_map(corpus_fr_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,content_transformer(removeEmoticons))
+
+
+   
+##remove white space
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,stripWhitespace)
+###
+
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,removeWords)
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_fr_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,stemDocument)
+cleaned_corpus_fr_emoji <- tm_map(cleaned_corpus_fr_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_fr_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+length(cleaned_corpus_fr_emoji)
+#inspect(cleaned_corpus_en_emoji[1:25])
+
+```
+
+
+
+##Average word length is 4.6 and average tweet length is 14.3 with emoji/emoticons
+
+##Entropy for tweets with emoji/emoticons
+
+```{r}
+#rm(words_list,wsize_per_tweet,corpus_fr_emoji)
+tdm <- TermDocumentMatrix(cleaned_corpus_fr_emoji)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_fr <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_fr)/log(2)
+H
+```
+
+
+##Entropy of French tweets with emoji/emoticons  is 9.80
+##Perplexity
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_fr, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+
+```{r}
+rm(tdm,freqSum_fr)
+2^H
+```
+
+
+```{r}
+#rm(new_data)
+
+new_data_fr <- data_fr %>% mutate(text=iconv(text, from = "latin1", to = "ascii", sub = "byte"))
+```
+
+
+```{r}
+is.factor(emDict$r_encoding)
+```
+
+```{r}
+head(new_data_fr)
+```
+
+#Average number of emoji's/tweet
+```{r}
+text <- as.data.frame(unique(new_data_fr$text))
+names(text)[1]<-"orig_tweets"
+```
+
+```{r}
+text 
+```
+
+```{r}
+text <- text %>% dplyr::filter(!str_detect(orig_tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+```
+
+
+
+
+```{r}
+library(dplyr)
+require(parallel) 
+raw_tweets_fr <- parallel_match(text$orig_tweets, matchto, description,mc.cores=8)%>% 
+  filter(text != "") %>% filter(!is.na(count)) 
+  
+```
+
+
+```{r}
+head(raw_tweets_fr,20)
+```
+
+```{r}
+drops <- c("sentiment")
+raw_tweets_altered_fr <-raw_tweets_fr[ , !(names(raw_tweets_fr) %in% drops)]
+```
+
+```{r}
+raw_tweets_altered_fr <- cbind(raw_tweets_altered_fr,unique_count=1)
+raw_tweets_altered_fr
+```
+
+
+```{r}
+group_raw_tweets_fr <- group_by(raw_tweets_altered_fr,text)%>%dplyr::summarise(count= sum(count),unique_count=sum(unique_count))
+group_raw_tweets_fr
+```
+#Average number of emoji's per tweet - English
+```{r}
+nrow(group_raw_tweets_fr)
+```
+
+```{r}
+mean(group_raw_tweets_fr$count, na.rm = TRUE)
+```
+
+The average number of emoji's per tweet in English is 1.30
+
+#Average number of unique emoji's per tweet - English
+
+```{r}
+mean(group_raw_tweets_fr$unique_count, na.rm = TRUE)
+```
+
+The average number of unique emoji's per tweet in English is 1.05
+
+#Emoji entropy - English
+```{r}
+H=Shannon(raw_tweets_fr$count)/log(2)
+H
+```
+The entropy of emoji's in english is 13.19
+
+#top 50 tweets with emoji's
+```{r}
+top50_fr_irma <- head(group_raw_tweets_fr[with(group_raw_tweets_fr,order(-count)),],50)
+top50_fr_irma
+```
+
+
+```{r}
+tweets <-  top50_fr_irma$text
+m <- gregexpr("<[0-9a-f]{2}>", tweets)
+codes <- regmatches(tweets, m)
+chars <- lapply(codes, function(x) {
+    rawToChar(as.raw(strtoi(paste0("0x", substr(x,2,3)))), multiple = TRUE)
+})
+
+regmatches(tweets, m) <- chars
+Encoding(tweets) <- "UTF-8"
+tweets
+```
+
+```{r}
+write.csv(tweets,"top_50_french_irma.csv")
+```
+
+
+##Perplexity of French tweets with emoji/emoticons  is 896
+
+##French tweets  without emoji/emoticons
+```{r}
+rm(cleaned_corpus_fr_emoji)
+### remove retweet entities
+ corpus_fr_NO_emoji <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_fr_NO_emoji) 
+ 
+corpus_fr_NO_emoji <- Corpus(VectorSource(corpus_fr_NO_emoji))
+##convert text to lowercase
+
+corpus_fr_NO_emoji <- tm_map(corpus_fr_NO_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_fr_NO_emoji <- tm_map(corpus_fr_NO_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_fr_NO_emoji <- tm_map(corpus_fr_NO_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##cleaned_corpus_USA_en_NO_emoji <- tm_map(corpus_USA_en_NO_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_fr_NO_emoji <- tm_map(corpus_fr_NO_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+cleaned_corpus_fr_NO_emoji <- tm_map(cleaned_corpus_fr_NO_emoji,removeWords)
+cleaned_corpus_fr_NO_emoji <- tm_map(cleaned_corpus_fr_NO_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_fr_NO_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_fr_NO_emoji <- tm_map(cleaned_corpus_fr_NO_emoji,stemDocument)
+cleaned_corpus_fr_NO_emoji <- tm_map(cleaned_corpus_fr_NO_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_fr_NO_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+```
+
+
+#Average word length is 4.3 and average tweet length is 8.6 without emoji/emoticons
+
+
+##Entropy analysis for French tweets without emoji/emoticons 
+
+```{r}
+tdm <- TermDocumentMatrix(cleaned_corpus_fr_NO_emoji)
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_fr_no_emoji <- slam::row_sums(tdm, na.rm = T)
+#freqSum_France_fr 
+H=Shannon(freqSum_fr_no_emoji)/log(2)
+H
+```
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_fr_no_emoji, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+##Entropy of French tweets with emoji/emoticons is 8.5
+
+Thus we can see that entropy for tweets without emoji/emoticons is slightly less than the entropy of tweets containing emoji/emoticons
+
+
+##Perplexity
+```{r}
+rm(tdm,cleaned_corpus_fr_NO_emoji,freqSum_fr_no_emoji)
+2^H
+```
+
+##Perplexity of French tweets without emoji/emoticons  is 362
+
+
+Spain 
+
+
+
+```{r}
+#rm(data,lang_groups)
+#rm(data)
+data_es <- subset(data_new,user_lang == "es")
+corpus_es <-  data_es$text
+length(corpus_es)
+##tweet with emoji/emoticons
+corpus_es <- unique(corpus_es)
+length(corpus_es)
+corpus_es <- text$orig_tweets
+length(corpus_es)
+```
+
+```{r}
+corpus_es_emoji <- group_raw_tweets_es$text
+corpus_es_NO_emoji_text <- subset(corpus_es, !(corpus_es %in% c(corpus_es_emoji)))
+corpus_es_NO_emoji_text <- as.data.frame(unique(corpus_es_NO_emoji_text))
+names(corpus_es_NO_emoji_text)[1]<-"tweets"
+corpus_es_NO_emoji_text <- corpus_es_NO_emoji_text %>%dplyr::filter(!str_detect(tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+corpus_es_NO_emoji <- corpus_es_NO_emoji_text$tweets
+length(corpus_es_emoji)
+length(corpus_es_NO_emoji)
+```
+
+
+##Spanish tweets  
+
+```{r}
+ ##Remove emoji
+corpus_es_full <- iconv(corpus_es, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_es_full <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_es_full) 
+
+
+corpus_es_full <- Corpus(VectorSource(corpus_es_full))
+
+
+
+##convert text to lowercase
+corpus_es_full <- tm_map(corpus_es_full,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_es_full <- tm_map(corpus_es_full,removePunctuation)
+
+
+##remove numbers from text
+corpus_es_full <- tm_map(corpus_es_full,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_es <- tm_map(corpus_es_full,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_es <- tm_map(cleaned_corpus_es,content_transformer(removeEmoticons))
+
+
+   
+##remove white space
+cleaned_corpus_es <- tm_map(cleaned_corpus_es,stripWhitespace)
+###
+
+cleaned_corpus_es<- tm_map(cleaned_corpus_es,removeWords)
+cleaned_corpus_es <- tm_map(cleaned_corpus_es,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_es$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_es <- tm_map(cleaned_corpus_es,stemDocument)
+cleaned_corpus_es <- tm_map(cleaned_corpus_es,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_es,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+length(cleaned_corpus_es)
+#inspect(cleaned_corpus_en_emoji[1:25])
+
+```
+
+```{r}
+cleaned_corpus_es = cleaned_corpus_es[cleaned_corpus_es!=""]
+length(cleaned_corpus_es)
+```
+
+
+
+
+##Average word length is 4.4 and average tweet length is 14.6 with emoji/emoticons
+
+##Entropy of spanish tweets
+
+```{r}
+rm(words_list,wsize_per_tweet,corpus_es,data_es)
+tdm <- TermDocumentMatrix(cleaned_corpus_es)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_es <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_es)/log(2)
+H
+```
+
+
+##Entropy of Spanish tweets is 9.77
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_es, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+
+Error bars with 95% confidence intervals
+```{r}
+wf <- data.frame(word=names(freqSum_es), freq=freqSum_es)   
+head(wf)
+```
+
+
+```{r}
+wf_new <-wf[which(wf$freq>40000),]
+nrow(wf_new)
+```
+
+
+```{r}
+#install.packages("Hmisc")
+ggplot(data=wf_new, aes(x=word, y=freq, fill=word))+ stat_summary(fun.y = mean, geom = "bar") + stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.3) + labs(x = "words", y = "frequency")
+
+```
+
+
+##Perplexity
+
+
+
+```{r}
+rm(tdm,freqSum_es)
+2^H
+```
+The perplexity of spanish tweets is 1319
+
+##Spanish tweets with emoji/emoticons
+
+```{r}
+rm(cleaned_corpus_es,corpus_es_full)
+ ##Remove emoji
+corpus_es_emoji <- iconv(corpus_es_emoji, "latin1", "ASCII", sub="")
+
+### remove retweet entities
+corpus_es_emoji <-  gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_es_emoji) 
+
+
+corpus_es_emoji <- Corpus(VectorSource(corpus_es_emoji))
+
+
+
+##convert text to lowercase
+corpus_es_emoji <- tm_map(corpus_es_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_es_emoji <- tm_map(corpus_es_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_es_emoji <- tm_map(corpus_es_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##corpus_USA_en_emoji <- tm_map(corpus_USA_en_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_es_emoji <- tm_map(corpus_es_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+##remove emoticons
+removeEmoticons <- function(x) gsub("(?::|;|=)(?:-)?(?:\\)|\\(|D|P)",'',x)
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,content_transformer(removeEmoticons))
+
+
+   
+##remove white space
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,stripWhitespace)
+###
+
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,removeWords)
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_es_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,stemDocument)
+cleaned_corpus_es_emoji <- tm_map(cleaned_corpus_es_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_es_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+length(cleaned_corpus_es_emoji)
+#inspect(cleaned_corpus_en_emoji[1:25])
+
+```
+
+
+
+##Average word length is 4.4 and average tweet length is 15.35 with emoji/emoticons
+
+##Entropy for spanish tweets with emoji/emoticons
+
+```{r}
+rm(words_list,wsize_per_tweet,corpus_es_emoji)
+tdm <- TermDocumentMatrix(cleaned_corpus_es_emoji)
+#tdm <- as.matrix(tdm)
+#print(tdm[1:10,1:20])
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_es <- slam::row_sums(tdm, na.rm = T)
+#apply(tdm, 1, sum)
+#freqSum_USA_en <- rowSums(tdm)
+#freqSum_France_fr 
+H=Shannon(freqSum_es)/log(2)
+H
+```
+
+
+##Entropy of spanish tweets with emoji/emoticons  is 9.67
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_es, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+##Perplexity
+
+
+
+```{r}
+rm(tdm,cleaned_corpus_es_emoji,freqSum_es)
+2^H
+```
+
+##Perplexity of Spanish tweets with emoji/emoticons  is 820
+
+```{r}
+#rm(new_data)
+
+new_data_es <- data_es %>% mutate(text=iconv(text, from = "latin1", to = "ascii", sub = "byte"))
+```
+
+
+```{r}
+is.factor(emDict$r_encoding)
+```
+
+
+
+#Average number of emoji's/tweet
+```{r}
+text <- as.data.frame(unique(new_data_es$text))
+names(text)[1]<-"orig_tweets"
+```
+
+```{r}
+text 
+```
+
+```{r}
+text <- text %>% dplyr::filter(!str_detect(orig_tweets,"(RT|via)((?:\\b\\W*@\\w+)+)"))
+```
+
+
+
+
+```{r}
+library(dplyr)
+require(parallel) 
+raw_tweets_es <- parallel_match(text$orig_tweets, matchto, description,mc.cores=4)%>% 
+  filter(text != "") %>% filter(!is.na(count)) 
+  
+```
+
+
+```{r}
+head(raw_tweets_es,20)
+```
+
+```{r}
+drops <- c("sentiment")
+raw_tweets_altered_es <-raw_tweets_es[ , !(names(raw_tweets_es) %in% drops)]
+```
+
+```{r}
+raw_tweets_altered_es <- cbind(raw_tweets_altered_es,unique_count=1)
+raw_tweets_altered_es
+```
+
+
+```{r}
+group_raw_tweets_es <- group_by(raw_tweets_altered_es,text)%>%dplyr::summarise(count= sum(count),unique_count=sum(unique_count))
+group_raw_tweets_es
+```
+#Average number of emoji's per tweet - English
+
+```{r}
+mean(group_raw_tweets_es$count, na.rm = TRUE)
+```
+
+The average number of emoji's per tweet in English is 1.26
+
+#Average number of unique emoji's per tweet - English
+
+```{r}
+mean(group_raw_tweets_es$unique_count, na.rm = TRUE)
+```
+
+The average number of unique emoji's per tweet in English is 1.07
+
+#Emoji entropy - English
+```{r}
+H=Shannon(raw_tweets_es$count)/log(2)
+H
+```
+The entropy of emoji's in english is 15.69
+
+#top 50 tweets with emoji's
+```{r}
+top50_es_irma <- head(group_raw_tweets_es[with(group_raw_tweets_es,order(-count)),],50)
+top50_es_irma
+```
+
+
+```{r}
+tweets <-  top50_es_irma$text
+m <- gregexpr("<[0-9a-f]{2}>", tweets)
+codes <- regmatches(tweets, m)
+chars <- lapply(codes, function(x) {
+    rawToChar(as.raw(strtoi(paste0("0x", substr(x,2,3)))), multiple = TRUE)
+})
+
+regmatches(tweets, m) <- chars
+Encoding(tweets) <- "UTF-8"
+tweets
+```
+
+```{r}
+write.csv(tweets,"top_50_spanish_irma.csv")
+```
+
+
+##Spanish tweets without emoji/emoticons
+```{r}
+
+### remove retweet entities
+ corpus_es_NO_emoji <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", corpus_es_NO_emoji) 
+ 
+corpus_es_NO_emoji <- Corpus(VectorSource(corpus_es_NO_emoji))
+##convert text to lowercase
+
+corpus_es_NO_emoji <- tm_map(corpus_es_NO_emoji,tolower)
+#inspect(corpus[1:5])
+
+##remove punctuations from text
+corpus_es_NO_emoji <- tm_map(corpus_es_NO_emoji,removePunctuation)
+
+
+##remove numbers from text
+corpus_es_NO_emoji <- tm_map(corpus_es_NO_emoji,removeNumbers)
+#inspect(corpus[1:5])
+
+##remove stopwords from french language 
+
+##cleaned_corpus_USA_en_NO_emoji <- tm_map(corpus_USA_en_NO_emoji,removeWords,stopwords("en"))
+
+
+##remove url from text
+removeURL <- function(x) gsub("http[[:alnum:]]*",'',x)
+cleaned_corpus_es_NO_emoji <- tm_map(corpus_es_NO_emoji,content_transformer(removeURL))
+#inspect(cleaned_corpus[1:5])
+
+cleaned_corpus_es_NO_emoji <- tm_map(cleaned_corpus_es_NO_emoji,removeWords)
+cleaned_corpus_es_NO_emoji <- tm_map(cleaned_corpus_es_NO_emoji,stripWhitespace)
+
+##average word length before stemming
+# split words
+words_list = strsplit(cleaned_corpus_es_NO_emoji$content," ")
+wsize_per_tweet = sapply(words_list, function(x) mean(nchar(x)))
+avg_word_len = mean(wsize_per_tweet,na.rm=TRUE)
+avg_word_len
+
+##Stemming
+cleaned_corpus_es_NO_emoji <- tm_map(cleaned_corpus_es_NO_emoji,stemDocument)
+cleaned_corpus_es_NO_emoji <- tm_map(cleaned_corpus_es_NO_emoji,stripWhitespace)
+
+##avg tweet length
+avg_tweet_len <- mean(sapply(cleaned_corpus_es_NO_emoji,function(x)length(unlist(gregexpr(" ",x)))+1))
+
+avg_tweet_len
+```
+
+
+#Average word length is 4.69 and average tweet length is 9.15 without emoji/emoticons
+
+
+##Entropy analysis for Spanish tweets without emoji/emoticons 
+
+```{r}
+rm(words_list,wsize_per_tweet)
+tdm <- TermDocumentMatrix(cleaned_corpus_es_NO_emoji)
+#tdm
+#tdm <- as.matrix(tdm)
+freqSum_es_no_emoji <- slam::row_sums(tdm, na.rm = T)
+#freqSum_France_fr 
+H=Shannon(freqSum_es_no_emoji)/log(2)
+H
+```
+
+##Entropy of english tweets  without emoji/emoticons is 10.09
+
+Thus we can see that entropy for tweets with emoji/emoticons is slightly less than the entropy of tweets without emoji/emoticons
+
+confidence intervals
+
+
+```{r}
+library("iNEXT")
+var<-ChaoShannon(freqSum_es_no_emoji, datatype = "abundance", conf = 0.95)/log(2)
+```
+
+
+```{r}
+var
+```
+
+##Perplexity
+```{r}
+rm(tdm,cleaned_corpus_es_NO_emoji)
+2^H
+```
+
+
+##Perplexity of Spanish tweets without emoji/emoticons  is 1091
+
+
+
+
+

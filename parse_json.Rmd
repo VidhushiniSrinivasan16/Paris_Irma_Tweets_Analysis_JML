@@ -1,0 +1,107 @@
+```{r}
+install.packages("streamR")
+```
+```{r}
+install.packages("scales")
+```
+```{r}
+install.packages("data.table", dependencies=TRUE)
+```
+```{r}
+update.packages() 
+```
+```{r}
+remove.packages("data.table")
+install.packages("data.table", dependencies=TRUE)
+```
+
+```{r}
+setwd("/Users/v.srinivasan/Downloads/")
+```
+
+
+```{r}
+library(data.table)
+```
+
+```{r}
+rm(t,tweets)
+```
+
+```{r}
+dir <- "/Users/v.srinivasan/Downloads/20170909/"
+files <- list.files(dir)
+
+library(tidyverse); library(streamR) ; 
+
+# find the user-stats file
+#user <- read_csv("./user-stats.csv")
+#col <- c("screenName", "LABEL")
+#ids <- user[,col]
+
+# initialize first time
+t <- parseTweets(paste0(dir,files[1]), simplify = TRUE)
+#t <- merge(t, ids, by.x = "screen_name", by.y = "screenName")
+tweets  <- t
+tweets <- tweets[0,]
+
+start.time <- Sys.time()
+for (i in files){
+  tryCatch({
+             t <- parseTweets(paste0(dir,i), simplify = TRUE)
+             #t <- merge(t, ids, by.x = "screen_name", by.y = "screenName")
+             tweets <- rbind(tweets, t)}, 
+             error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+
+```{r}
+tweets[0]
+```
+
+```{r}
+rm(tweets_df)
+```
+
+
+
+```{r}
+tweets_df <- tweets %>%
+        select(id_str,created_at, text, location, lang,screen_name,user_id_str)
+# Filter English tweets
+#tweets_df <- tweets_df[tweets_df$lang == "en",]
+#tweets_df$created_at <- parse_datetime(substr(tweets_df$created_at,5,100), format = "%b %d %H:%M:%S %z %Y")
+```
+
+```{r}
+write.csv(tweets_df, file = "irma09.csv")
+```
+
+
+
+```{r}
+folder <- "/Users/majerus/Desktop/R/intro/data/"      # path to folder that holds multiple .csv files
+file_list <- list.files(path=folder, pattern="*.csv") # create list of all .csv files in folder
+
+# read in each .csv file in file_list and rbind them into a data frame called data 
+data <- 
+  do.call("rbind", 
+          lapply(file_list, 
+                 function(x) 
+                 read.csv(paste(folder, x, sep=''), 
+                 stringsAsFactors = FALSE)))
+```
+
+
+
+```{r}
+library(data.table)  
+files <- list.files(path = "/etc/dump",pattern = ".csv")
+temp <- lapply(files, fread, sep=",")
+data <- rbindlist( temp )
+```
+
+

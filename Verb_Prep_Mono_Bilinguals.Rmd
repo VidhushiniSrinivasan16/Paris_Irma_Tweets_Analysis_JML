@@ -1,0 +1,130 @@
+```{r}
+install.packages("spacyr")
+```
+
+
+
+```{r}
+#function which will bootstrap entropies
+boot.entropy <- function(data, num) {
+    resamples <- lapply(1:num, function(i) sample(data, replace=T))
+    parsed_text<-spacy_parse(resamples)
+    H.entropy <- sapply(freq, shannon_entropy)
+      
+}
+```
+
+```{r}
+shannon_entropy <- function(freq) {
+     
+     H<-Shannon(freq)/log(2)
+}
+```
+
+verb-prep normal
+
+```{r}
+mono_en<-read.csv2(file="entropy_mono_en.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+
+biling_en<-read.csv2(file="entropy_biling_en_ref.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+```
+
+
+
+
+
+
+```{r}
+boot_mono_biling<-Reduce(function(x, y) merge(x, y, all=TRUE), list(mono_en,biling_en))
+```
+
+```{r}
+summary(aov(H ~ Mono_Biling, data = boot_mono_biling))
+```
+Confidence Interval - Mono
+ 
+```{r}
+library("iNEXT")
+freq_mono<- read.csv2(file="freq_mono_en.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+mono_CI<-ChaoShannon(freq_mono$F, datatype = "abundance", conf = 0.95)
+```
+ 
+```{r}
+mono_CI
+```
+
+Confidence Interval - Bi
+```{r}
+library("iNEXT")
+freq_bi<- read.csv2(file="freq_bi_en_ref.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+bi_CI<-ChaoShannon(freq_bi$F, datatype = "abundance", conf = 0.95)
+bi_CI
+```
+
+Perplexity - Mono
+```{r}
+H_mono<-7.956
+2^H_mono
+```
+
+Perplexity _ Bi
+```{r}
+H_bi<-7.218
+2^H_bi
+```
+
+
+TOP 20
+
+```{r}
+mono_en_top20<-read.csv2(file="entropy_mono_en_top20.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+
+biling_en_top20<-read.csv2(file="entropy_biling_en_top20_ref.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+```
+
+
+
+
+
+
+```{r}
+boot_mono_biling<-Reduce(function(x, y) merge(x, y, all=TRUE), list(mono_en_top20,biling_en_top20))
+```
+
+```{r}
+summary(aov(H ~ Mono_Biling, data = boot_mono_biling))
+```
+Confidence Interval - Mono
+ 
+```{r}
+library("iNEXT")
+freq_mono<- read.csv2(file="freq_mono_en_top20.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+mono_CI<-ChaoShannon(freq_mono$F, datatype = "abundance", conf = 0.95)
+```
+ 
+```{r}
+mono_CI
+```
+
+
+Confidence Interval - Bi
+```{r}
+library("iNEXT")
+freq_bi<- read.csv2(file="freq_biling_en_top20_ref.csv",header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+bi_CI<-ChaoShannon(freq_bi$F, datatype = "abundance", conf = 0.95)
+bi_CI
+```
+
+Perplexity - Mono
+```{r}
+H_mono<-5.248
+2^H_mono
+```
+
+Perplexity _ Bi
+```{r}
+H_bi<-4.646
+2^H_bi
+```
+
+ 
