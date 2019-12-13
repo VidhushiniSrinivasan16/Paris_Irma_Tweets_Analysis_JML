@@ -18,7 +18,7 @@ Please download the tweets with the help of the tweet IDs using this [repository
 
 **Parsing JSON dataset**
 ```
-parsing_json.Rmd -> Extracting tweets and necessrary fields from JSON.
+parsing_json.Rmd -> Extracting tweets and necessary fields from JSON.
 ```
 
 **Scripts**
